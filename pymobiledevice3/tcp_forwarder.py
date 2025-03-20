@@ -198,23 +198,40 @@ class UsbmuxTcpForwarder(TcpForwarderBase):
         return mux_device.connect(self.dst_port, usbmux_address=self.usbmux_address)
 
 
+import socket
+import time
+from pymobiledevice3.lockdown_service_provider import LockdownServiceProvider
+
 class LockdownTcpForwarder(TcpForwarderBase):
     """
-    Allows forwarding local tcp connection into the device via a given lockdown connection
+    Allows forwarding local TCP connections into the iPhone via Lockdown service.
     """
 
     def __init__(self, service_provider: LockdownServiceProvider, src_port: int, service_name: str,
                  listening_event: threading.Event = None):
         """
-        Initialize a new tcp forwarder
+        Initialize a TCP forwarder.
 
-        :param src_port: tcp port to listen on
-        :param service_name: service name to connect to
-        :param listening_event: event to fire when the listening occurred
+        :param service_provider: Lockdown service provider instance.
+        :param src_port: TCP port to listen on.
+        :param service_name: Service name to connect to on the iPhone.
+        :param listening_event: Event to fire when the listening starts.
         """
         super().__init__(src_port, listening_event)
         self.service_provider = service_provider
         self.service_name = service_name
 
     def _establish_remote_connection(self) -> socket.socket:
-        return self.service_provider.start_lockdown_developer_service(self.service_name).socket
+        """
+        Establish a connection to the iPhone using Tailscale.
+
+        :return: A socket connected to the iPhone over Tailscale.
+        """
+        # Force Tailscale routing
+        tailscale_iphone_ip = "100.119.166.25"  # iPhone's Tailscale IP
+        print(f"🔄 Using Tailscale to connect to iPhone at {tailscale_iphone_ip}:{self.src_port}")
+
+        # Connect via TCP over Tailscale
+        sock = socket.create_connection((tailscale_iphone_ip, self.src_port), timeout=5)
+        sock.setblocking(False)
+        return sock
