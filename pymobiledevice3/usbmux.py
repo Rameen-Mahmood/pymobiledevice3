@@ -84,10 +84,24 @@ class MuxDevice:
     connection_type: str
 
     def connect(self, port: int, usbmux_address: Optional[str] = None) -> socket.socket:
+        """
+        Establish a connection to the device.
+        If the device is using Tailscale, connect over TCP instead of using usbmuxd.
+
+        :param port: The port to connect to.
+        :param usbmux_address: The usbmuxd address (not used for Tailscale).
+        :return: A socket connected to the iPhone over Tailscale.
+        """
+        if self.connection_type == "Tailscale":
+            print(f"🔄 Connecting to iPhone via Tailscale at {self.serial}:{port}")
+            sock = socket.create_connection((self.serial, port), timeout=5)
+            return sock
+
+        # Default behavior for USB
         mux = create_mux(usbmux_address=usbmux_address)
         try:
             return mux.connect(self, port)
-        except:  # noqa: E722
+        except:
             mux.close()
             raise
 
@@ -423,27 +437,33 @@ def list_devices(usbmux_address: Optional[str] = None) -> list[MuxDevice]:
 def select_device(udid: str = None, connection_type: str = None, usbmux_address: Optional[str] = None) \
         -> Optional[MuxDevice]:
     """
-    select a UsbMux device according to given arguments.
-    if more than one device could be selected, always prefer the usb one.
+    Select a UsbMux device. If no USB devices are available, use Tailscale.
+
+    :param udid: The UDID of the device to connect to.
+    :param connection_type: Preferred connection type ('USB' or 'Network').
+    :param usbmux_address: The address of the usbmuxd socket.
+    :return: A MuxDevice instance or None.
     """
-    tmp = None
-    for device in list_devices(usbmux_address=usbmux_address):
-        if connection_type is not None and device.connection_type != connection_type:
-            # if a specific connection_type was desired and not of this one then skip
-            continue
+    devices = list_devices(usbmux_address=usbmux_address)
 
-        if udid is not None and not device.matches_udid(udid):
-            # if a specific udid was desired and not of this one then skip
-            continue
+    for device in devices:
+        if connection_type and device.connection_type != connection_type:
+            continue  # Skip devices that don't match the required connection type
 
-        # save best result as a temporary
-        tmp = device
+        if udid and not device.matches_udid(udid):
+            continue  # Skip devices that don't match the requested UDID
 
+        # If a USB device is available, return it
         if device.is_usb:
-            # always prefer usb connection
             return device
 
-    return tmp
+    # 🚨 If no USB device is found, fall back to Tailscale
+    tailscale_iphone_ip = "100.119.166.25"  # iPhone's Tailscale IP
+    print(f"🔄 No USB device found. Using Tailscale IP: {tailscale_iphone_ip}")
+
+    return MuxDevice(devid=9999, serial=tailscale_iphone_ip, connection_type="Tailscale")
+
+
 
 
 def select_devices_by_connection_type(connection_type: str, usbmux_address: Optional[str] = None) -> list[MuxDevice]:
