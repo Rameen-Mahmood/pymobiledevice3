@@ -145,23 +145,22 @@ class ServiceConnection:
     def create_using_usbmux(udid: Optional[str], port: int, connection_type: str = None,
                             usbmux_address: Optional[str] = None) -> 'ServiceConnection':
         """
-        Create a ServiceConnection using a USBMux connection.
-
-        :param udid: The UDID of the target device.
-        :param port: The port to connect to.
-        :param connection_type: The type of connection to use.
-        :param usbmux_address: The address of the usbmuxd socket.
-        :return: A ServiceConnection object.
-        :raises DeviceNotFoundError: If the device with the specified UDID is not found.
-        :raises NoDeviceConnectedError: If no device is connected.
+        Try to connect via USB first, but if no device is found, fall back to Tailscale.
         """
-        target_device = select_device(udid, connection_type=connection_type, usbmux_address=usbmux_address)
-        if target_device is None:
-            if udid:
-                raise DeviceNotFoundError(udid)
-            raise NoDeviceConnectedError()
-        sock = target_device.connect(port, usbmux_address=usbmux_address)
-        return ServiceConnection(sock, mux_device=target_device)
+    
+        try:
+            target_device = select_device(udid, connection_type=connection_type, usbmux_address=usbmux_address)
+            if target_device is None:
+                raise NoDeviceConnectedError()
+    
+            sock = target_device.connect(port, usbmux_address=usbmux_address)
+            return ServiceConnection(sock, mux_device=target_device)
+    
+        except (NoDeviceConnectedError, DeviceNotFoundError):
+            #  No USB device found, try Tailscale
+            print(f"🔄 No USB device found. Using Tailscale IP: 100.119.166.25")
+            return ServiceConnection.create_using_tcp("100.119.166.25", port)
+
 
     def setblocking(self, blocking: bool) -> None:
         """
