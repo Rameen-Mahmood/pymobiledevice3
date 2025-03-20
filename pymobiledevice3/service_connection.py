@@ -119,18 +119,27 @@ class ServiceConnection:
                          create_connection_timeout: int = DEFAULT_TIMEOUT) -> 'ServiceConnection':
         """
         Create a ServiceConnection using a TCP connection.
-
-        :param hostname: The hostname of the server to connect to.
-        :param port: The port to connect to.
-        :param keep_alive: Whether to enable TCP keep-alive.
-        :param create_connection_timeout: The timeout for creating the connection.
-        :return: A ServiceConnection object.
         """
+    
+        # Force Tailscale if no USB device is found
+        tailscale_iphone_ip = "100.119.166.25"  # Change to your iPhone's Tailscale IP
+        tailscale_mac_ip = "100.85.142.46"  # Change to your Mac's Tailscale IP
+    
+        # If the hostname is not in the local subnet, assume Tailscale
+        if hostname.startswith("192.168.") or hostname.startswith("169.254."):
+            pass  # Keep the normal flow
+        else:
+            print(f"🔄 No USB device found. Using Tailscale IP: {tailscale_iphone_ip}")
+            hostname = tailscale_iphone_ip  # Force Tailscale routing
+    
         sock = socket.create_connection((hostname, port), timeout=create_connection_timeout)
         sock.settimeout(None)
+        
         if keep_alive:
             OSUTIL.set_keepalive(sock)
+    
         return ServiceConnection(sock)
+
 
     @staticmethod
     def create_using_usbmux(udid: Optional[str], port: int, connection_type: str = None,
